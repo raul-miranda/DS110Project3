@@ -1,0 +1,309 @@
+---
+title: "Project 3"
+author: "Raul Miranda"
+date: "12/14/2020"
+output: html_document
+---
+
+# Climate-Related Signs and Consequences
+
+Source: World Bank "Climate Change", https://data.worldbank.org/topic/climate-change
+
+Dataset: downloaded CSV file from World Bank
+
+Output RPubs in: https://rpubs.com/rmiranda/704282
+
+```{r setup, include=FALSE}
+
+require(knitr)
+options(repos="https://cran.rstudio.com")
+knitr::opts_chunk$set(echo = TRUE) 
+# set the default root.dir in this r-setup chunk for the whole notebook
+opts_knit$set(root.dir = "/Users/raulmiranda/Desktop/DATA 110 Fall 2020/Databases/World Bank Climate Change/")
+
+```
+
+### Load packages and libraries
+
+```{r message=FALSE, warning=FALSE}
+
+install.packages("tidyverse")
+install.packages("readr")
+install.packages("Metrics")
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(RColorBrewer)
+library(viridis)
+library(Metrics)
+library(splines)
+library(mgcv)
+
+```
+
+### Read in dataset
+
+```{r}
+worldclim <- read.csv("API_19_DS2_en_csv_v2_1741755.csv", header = FALSE)  # file with header
+head(worldclim)
+```
+
+### Clean header, correct column names, convert to long
+
+```{r}
+worldclim <- worldclim[-(1:2),]   # delete first two rows of header
+colnames(worldclim) <- worldclim[1,]   # make column name = first row
+worldclim <- worldclim[-1,]       # delete first row
+names(worldclim) <- gsub(" ", "_", names(worldclim))  # replace space in var name with underscore
+worldclim <- worldclim[,-ncol(worldclim)]  #  delete last column - empty
+worldclim <- gather(worldclim, key="year", value="quantity", "1960":"2020")  # make long
+worldclim$year <- as.numeric(worldclim$year)  # convert chr to numeric, needed for plots and stats
+str(worldclim)
+
+```
+
+### Take a Glimpse at USA and selected Indicators: population, emissions, energy use
+
+```{r}
+
+# Notes: some details when using variable names in grepl or logical comparisons 
+#      note: for var name with a space, I had to use backquotes such as `Country Name`;
+#            all vars were cleaned of spaces to avoid this complication
+#      note:  for grepl I used the escape with parentheses: \\( \\)
+#             however, for logical comparisons, I had to remove the escape!!
+#      note:  to greplmore than one Indicator I used paste():  grepl(paste(c("Energy use", "CO2
+#              emissions"),collapse = "|"), Indicator_Name, ignore.case = TRUE) 
+
+USclim <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Population, total", "Energy use \\(kg of oil equivalent per capita\\)", "CO2 emissions \\(metric tons per capita\\)"), collapse = "|"), Indicator_Name))
+
+# scale the Indicator values for clearer graphs 
+
+USclimodf <- within(USclim, {
+  f <- Indicator_Name == 'Population, total'
+      quantity[f] <- quantity[f]/10^6})           #Population in million
+
+USclimodf <- within(USclimodf, {
+  f <- Indicator_Name == 'Energy use (kg of oil equivalent per capita)'
+      quantity[f] <- quantity[f]/25})            # Energy use: multiply 25 kg Oil-E-P-Capita
+
+USclimodf <- within(USclimodf, {
+  f <- Indicator_Name == 'CO2 emissions (metric tons per capita)'
+      quantity[f] <- quantity[f]*10})            # CO2 emission: multiply 0.1 ton Per Capita
+
+USclimodf$f <- NULL # remove the added column 'f'
+
+USclimgrp <- group_by(USclimodf, Indicator_Name, year)  # not absolutely necessary if not followed by aggregation
+head(USclimgrp)
+
+```
+
+### Exploratory: show each of the three Indicators for the US
+
+```{r}
+
+p0 <- ggplot(data=USclimgrp,aes(x=year, y=quantity, color=Indicator_Name)) +
+  theme_linedraw() +          
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ Indicator_Name, scales = "free_y", 
+    labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+  theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) +
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+  theme(legend.position="bottom", legend.title = element_blank())
+# Notes: facet_grid - it will be useful for more than one country :
+#   facet_grid(Indicator_Name ~ Country_Name, margins=TRUE, scales = "free_y")
+#   scale_x_discrete(guide = guide_axis(n.dodge = 6 )) # x-label too cluttered
+#   geom_smooth(aes(x=year, y=quantity, color=Indicator_Name))  # less precise
+
+p0
+
+```
+
+### Show Fig. 1: population, energy use and emissions in single scatterplot
+
+```{r}
+
+p1 <- ggplot(data=USclimgrp,aes(x=year, y=quantity, color=Indicator_Name, alpha = Indicator_Name=='Population, total')) +       # reduce the alpha only for Population
+  theme_dark()  +
+  geom_point(size = 3)  +
+  geom_line() +
+  scale_alpha_manual(values = c(1, .4), guide=FALSE) +
+  theme (axis.text.x = element_text(angle = 0, hjust = 0.5), axis.title.x = element_blank()) +
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+#  scale_y_continuous(sec.axis= sec_axis(~.*25, name ="Energy Use and CO2 Emissions, per capita")) +        # adding a second y axis became more cluttered, so showing only one y axis
+  ylab("Population, Energy Use and CO2 Emissions") +
+  theme(legend.position="bottom", legend.title = element_blank()) +
+  theme(plot.subtitle=element_text(hjust = 0.05)) +
+#  set the order and labes of Indicators in the legend using scale_color_discrete
+    scale_color_discrete(
+  limits = c('Population, total', 'Energy use (kg of oil equivalent per capita)', 'CO2 emissions (metric tons per capita)'),
+  labels = c('Population (Million)', 'Energy use per capita (/25 kg oil equivalent)', 'CO2 emissions per capita (*10 ton)')) +
+labs(title="Fig. 1 - US Population, Energy Use and Emissions", subtitle = "A 55-Year History Showing Promise",
+caption = "Source: World Bank, https://data.worldbank.org/topic/climate-change")
+
+p1
+ggplotly(p1)
+```
+
+### Obtain selected socioeconomic Indicators for the USA
+
+```{r}
+
+USsocioec <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Urban population \\(% of total population\\)", "Mortality rate, under-5 \\(per 1,000 live births\\)", "Population in urban agglomerations of more than 1 million \\(% of total population\\)","^Population living in areas where elevation is below 5 meters \\(% of total population\\)","Access to electricity \\(% of population\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USsocioec)
+
+```
+
+### Exploratory: show the socioeconomic Indicators for the USA
+
+```{r}
+
+p2 <- ggplot(data=USsocioec,aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y",
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p2
+
+```
+### Obtain Selected Agricultural Indicators for the USA
+
+```{r}
+
+USclimagric <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Terrestrial and marine protected areas \\(% of total territorial area\\)","Marine protected areas \\(% of territorial waters\\)","Terrestrial protected areas \\(% of total land area\\)","Forest area \\(sq. km\\)", "Agricultural land \\(sq. km\\)", "Rural land area where elevation is below 5 meters \\(sq. km\\)", "Average precipitation in depth \\(mm per year\\)", "Annual freshwater withdrawals, total \\(billion cubic meters\\)", "Cereal yield \\(kg per hectare\\)" ), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USclimagric)
+
+```
+
+### Exploratory: show Agricultural Indicators for the USA
+
+```{r}
+
+p3 <- ggplot(data=USclimagric, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y",
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p3
+
+```
+
+### Obtain Detailed Energy and Emission Indicators for the USA
+
+```{r}
+
+USenrgemiss <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("GHG net emissions/removals by LUCF \\(Mt of CO2 equivalent\\)","SF6 gas emissions \\(thousand metric tons of CO2 equivalent\\)","Nitrous oxide emissions \\(thousand metric tons of CO2 equivalent\\)","Methane emissions \\(kt of CO2 equivalent\\)", "PFC gas emissions \\(thousand metric tons of CO2 equivalent\\)", "HFC gas emissions \\(thousand metric tons of CO2 equivalent\\)", "Total greenhouse gas emissions \\(kt of CO2 equivalent\\)", "Other greenhouse gas emissions, HFC, PFC and SF6 \\(thousand metric tons of CO2 equivalent\\)","CO2 emissions from solid fuel consumption \\(kt\\)","CO2 emissions from liquid fuel consumption \\(kt\\)", "CO2 emissions \\(kt\\)","CO2 emissions from gaseous fuel consumption \\(kt\\)","CO2 intensity \\(kg per kg of oil equivalent energy use\\)","Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)","Renewable energy consumption \\(% of total final energy consumption\\)","Electricity production from renewable sources, excluding hydroelectric \\(% of total\\)","Renewable electricity output \\(% of total electricity output\\)","Electricity production from oil sources \\(% of total\\)", "Electricity production from nuclear sources \\(% of total\\)","Electricity production from natural gas sources \\(% of total\\)","Electricity production from hydroelectric sources \\(% of total\\)","Electricity production from coal sources \\(% of total\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USenrgemiss)
+
+```
+
+### Exploratory:  show the energy and emission indicators
+
+```{r}
+p4 <- ggplot(data=USenrgemiss, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y", 
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 50))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p4
+
+```
+
+### Remove the least informative indicators
+
+```{r}
+
+USenrgemiss2 <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Nitrous oxide emissions \\(thousand metric tons of CO2 equivalent\\)","Methane emissions \\(kt of CO2 equivalent\\)", "Total greenhouse gas emissions \\(kt of CO2 equivalent\\)", "Other greenhouse gas emissions, HFC, PFC and SF6 \\(thousand metric tons of CO2 equivalent\\)","CO2 emissions from solid fuel consumption \\(kt\\)","CO2 emissions from liquid fuel consumption \\(kt\\)", "CO2 emissions \\(kt\\)","CO2 emissions from gaseous fuel consumption \\(kt\\)","CO2 intensity \\(kg per kg of oil equivalent energy use\\)","Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)","Renewable energy consumption \\(% of total final energy consumption\\)","Electricity production from renewable sources, excluding hydroelectric \\(% of total\\)", "Electricity production from oil sources \\(% of total\\)", "Electricity production from nuclear sources \\(% of total\\)","Electricity production from natural gas sources \\(% of total\\)","Electricity production from hydroelectric sources \\(% of total\\)","Electricity production from coal sources \\(% of total\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+```
+
+### Exploratory: show the Energy and Emission Indicators
+
+```{r}
+
+p5 <- ggplot(data=USenrgemiss2, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y", 
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 50))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p5
+
+```
+### Show Energy, total vs electric
+
+```{r}
+
+# select population, energy total and electric
+USenergy <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Population, total", "Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)"), collapse = "|"), Indicator_Name))
+
+# Obtain total energy by multiplying Population * energy per capita
+# Convert units of energy to QUAD in the indicators
+# conversion factors: 1 kWh = 3.412*10^-12 QUAD
+#                     1 kg Oil Equiv = 39.686*10-12 QUAD
+
+USenermdf <- within(USenergy, {
+ f <- Indicator_Name == 'Population, total'
+ g <- Indicator_Name == 'Electric power consumption (kWh per capita)'
+ quantity[g] <- quantity[f]*quantity[g]*3.412*(10^-12)})    # elec energy in Quads
+
+USenermdf <- within(USenermdf, {
+ f <- Indicator_Name == 'Population, total'
+ g <- Indicator_Name == 'Electric power consumption (kWh per capita)'
+ h <- Indicator_Name == 'Energy use (kg of oil equivalent per capita)'
+ quantity[h] <- quantity[f]*quantity[h]*39.686*(10^-12) - quantity[g]})  # Energy Tot-Elec Quads
+
+USenermdf <- filter(USenermdf, ! Indicator_Name == "Population, total") # remove Population from the plot
+
+p6 <- ggplot(USenermdf, aes(x=year, y=quantity, fill= factor(Indicator_Name))) +
+  geom_area(stat="identity") +
+  theme_dark() +
+  theme (axis.text.x = element_text(angle = 0, hjust = 0.5), axis.title.x = element_blank()) +
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+  ylab("Energy Consumed in the USA (QUAD)") +
+  theme(legend.position="top", legend.title = element_blank()) +
+#  set the order and labes of Indicators in the legend using scale_color_discrete
+  scale_fill_discrete(
+  limits = c('Electric power consumption (kWh per capita)', 'Energy use (kg of oil equivalent per capita)'),
+  labels = c('Electric Energy', 'Non-Electric Energy') )+
+labs(title="Fig. 2 - Electric Energy Fraction is Increasing",
+caption = "1 QUAD = 10^15 BTU = 2.52*10^7 Ton Oil Equiv = 2.93*10^8 MWh \n Source: World Bank, https://data.worldbank.org/topic/climate-change")
+
+p6
+ggplotly(p6)
+
+``` 
+
+### Components of Electric Energy
+
+### Components of Greenhouse Gases
+
+### Global Contributors and Remediators : world map with color indicating total CO2 emission in each country, bubble size indicating electric/non-electric ratio, bubble color indicating forested area
+
+### Correlations
+
+### Essay
+
