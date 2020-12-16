@@ -355,7 +355,7 @@ As a starting step, this project was focused on the USA, or about 25,000 records
 
 ### Exloration of trends in population, CO2 emissions, and energy use per capita
 
-In order to obtain an impression of the 55-year evolution, we isolated the three indicators with and scaled their values appropriately for a clear graphical depiction in a scatterplot format. Notice that in the exploratory plots, Population is expressed in million, while Energy use expressed as kg oil equivalent per capita must be multiplied by 25, and CO2 emission expressed as ton per capita must be divided by 10.
+In order to obtain an impression of the 55-year evolution, we isolated the three indicators and scaled their values appropriately for a clear graphical depiction in a scatterplot format. Notice that in the exploratory plots, Population is expressed in million, while Energy use expressed as kg oil equivalent per capita must be multiplied by 25, and CO2 emission expressed as ton per capita must be divided by 10.
 
 Fig. 1 shows that while the US population grew linearly over the entire time period, the energy use per capita had drastic variations. Energy use increased by over 50% in the 1960s, reaching its peak in 1973, when the two oil crises of 1973 and 1979 caused it to descend by 20%. Energy use then rose slowly in the 1980-2000 period up to 10% below its 1973 peak. Since 2000 energy use per capita has been steadily decreasing and is now at the level it was in 1968. This has been made possible by progress in all technologies that are making more efficient use of energy, even with a constantly rising standard of living.  The CO2 emission curve shows a parallel trend to that of energy use, an indication that CO2 emission is mainly due to total combustion of carbon-containing fuels. The very encouraging sign is that CO2 emission per capita is at a level equivalent to that of 1960. This is due not only to more efficient use of energy but also to active approaches to reduce the CO2 emitted per unit of energy, by substituting coal by liquid fuels, and more recently, natural gas. The transition from coal-based energy supply to liquid and gas energy supply over the last decades was studied and shown in Project 2. In this third project, we are being surprised by the drastic decrease shown by the data for energy use and CO2 emission per capita.
 
@@ -378,7 +378,7 @@ Agricultural land has decreased about 10% over 55 years, perhaps associated with
 
 The other good trend is the rise of forest land, albeit only by 3.5%, not sufficiently to absorb the excess of emitted CO2. Planned reforestation is, however, an effective approach that should be enlarged.
 
-Average freshwater withdrawal has averaged 470 billion cubic meters, decreasing from 518 to 419 in 35 year, but the data is insufficient to show that global warming is the cause.
+Average freshwater withdrawal has averaged 470 billion cubic meters, decreasing from 518 to 419 in 35 years, but the data is insufficient to show that global warming is the cause.
 
 These indicators are likely very informative when comparing countries at various levels of economic development, particularly to compare changes in agricultural and forestation practices.
 
@@ -386,9 +386,9 @@ These indicators are likely very informative when comparing countries at various
 
 The question to explore was what specific greenhouse gases are emitted and which electrical energy sources are used in the US.  Identifying the specific gases may lead to more targeted technologies. Electricity is an energy carrier and intrinsically has no GHG consequence during use. However, the means by which it is produced leads to different amounts of GHG emission. 
 
-An initial set of 23 indicators included separate charts for CFC, SF6 and HFC, which are fluorocarbons and sulfur fluoride emitted during from chemicals and materials produced in electronic manufacturing, refrigerants, house and car insulation, plastic insulation of electrical cables, etc. They have a significant global warming effect, but the amount emitted is a small fraction compared to CO2 and methane emissions. Thus the set was reduced to 18 indicators that included a cumulative curve for HFC, PFC and SF6.
+An initial set of 23 indicators included separate charts for CFC, SF6 and HFC, which are fluorocarbons and sulfur fluoride emitted from chemicals and materials produced for electronic manufacturing, refrigerants, house and car insulation, plastic insulation of electrical cables, etc. They have a significant global warming effect, but the amount emitted is a small fraction compared to CO2 and methane emissions. Thus the set was reduced to 18 indicators that included a cumulative curve for HFC, PFC and SF6.
 
-Other emission indicators included CO2 emissions from gaseous, liquid and solid fuels separately; methane emissions; and nitrous oxide emissions. 
+Other indicators included CO2 emissions from gaseous, liquid and solid fuels separately; methane emissions; and nitrous oxide emissions. 
 
 The electricity sources included coal, hydroelectric, natural gas, nuclear, oil, and renewable sources.
 
@@ -401,15 +401,15 @@ Visual examination of the various trends allowed us to draw the following conclu
 
 The total CO2 emissions chart resembles the trace observed in Fig. 1 (emissions per capita) but multiplied by population. Thus, after a drop in total CO2 emissions that started in 2005, the current level is equivalent to the 1992 emissions, still a very encouraging sign of progress.
 
-Examining the emissions from the various types of fuels, it can be concluded that liquid sources (oil) led to the rapid rise in the 1960-1980 period, coal sources and natural gas produced the increases in 1980-2000. The continuous decrease after 2005 is due to the substition of coal by natural gas.   Natural gas produces less CO2 than coal or liquid hydrocarbons for the same amount of energy produced.
+Examining the emissions from the various types of fuels, it can be concluded that liquid sources (oil) led to the rapid rise in the 1960-1980 period, while coal sources and natural gas produced the increases in 1980-2000. The continuous decrease after 2005 is due to the substitution of coal by natural gas.   Natural gas produces less CO2 than coal or liquid hydrocarbons for the same amount of energy generated.
 
-A fantastic trend is shown by CO2 intensity, which is the amount of CO2 emitted per unit of energy used (mean value: 2.6 kg of CO2 per kg of oil equivalent).  Over the past 50 years, it has been continuously decreasing from 2.8 to 2.3 kg/kg. As reflected when examining Fig. 1, this is a sign of technological advancement, and of using less polluting fuels.
+A fantastic trend is shown by CO2 intensity, which is the amount of CO2 emitted per unit of energy used (mean value: 2.6 kg of CO2 per kg of oil equivalent).  Over the past 50 years, it has been continuously decreasing from 2.8 to 2.3 kg/kg. As reflected when examining Fig. 1, this is a sign of technological advancement, and of using more carbon-neutral and carbon-free fuels.
 
 #### Other emissions
 
-Methane and nitrous oxide: both have global warming effects larger than CO2 but are emitted in lesser quantities. As depicted in the charts, they represent 10% and 6%, respectively, of the corresponding amounts of CO2 and have been continuously decreasing since the early 1990s to 8% and 5% of the amounts of CO2. While nitrous oxide is a product of combustion, like CO2, methane is released primarily through leaks in pipelines and at flares in refineries. Current regulations curtail flaring methane and are having an impact.
+Methane and nitrous oxide: both have global warming effects larger than CO2 but are emitted in lesser quantities. As depicted in the charts, they represent 10% and 6%, respectively, of the corresponding amounts of CO2 and have been continuously decreasing since the early 1990s down to 8% and 5% of the amounts of CO2. While nitrous oxide is a product of combustion, like CO2, methane is released primarily through leaks in pipelines and at flares in refineries. Current regulations curtail flaring methane and are having an impact.
 
-The chlorofluorocarbons, on the other hand, are increasing, and in aggregate represent about 10% of the corresponding amount of CO2. This is a source which could be better regulated by governments and controlled by plastics and insulator manufacturers.
+The chlorofluorocarbons, on the other hand, are increasing, and in aggregate represent about 10% of the corresponding amount of CO2. This is a source which could be better regulated by governments and controlled by electrical and building insulator manufacturers and users.
 
 ### Electrical Energy Generation
 
@@ -419,9 +419,9 @@ An examination of the charts reveals that coal sources predominated (>50% supply
 
 The electrical and non-electrical energy consumed in the US are compared in Fig. 2. The calculation involved multiplying energies per capita by population for each year. To obtain the non-electrical energy, the electrical energy was subtracted from the total energy consumed in the US. The units for both types of energy were converted to Quad for proper comparison (1 Quad = 10^15 BTU).
 
-The figure shows that the fraction of electric energy has been increasing since 1960, it is now at 16% of all energy used in the US, and the pace is accelerating. This is a good sign. As discussed in the previous section, the rise of natural gas and the emergence of solar energy are leading to less CO2 and nitrous oxide emissions. The downward trend shown by the CO2 intensity chart is indicative of continuous technological progress.
+The figure shows that the fraction of electrical energy has been increasing since 1960, it is now at 16% of all energy used in the US, and the pace is accelerating. This is a good sign. As discussed in the previous section, the rise of natural gas and the emergence of solar energy are leading to less CO2 and nitrous oxide emissions. The downward trend shown by the CO2 intensity chart is indicative of continuous technological progress.
 
-As new technologies are introduced, such as wind, and less combustible fuels are used, progress will surely accelerate further. This, coupled with global practices such as reforestation, complete capture and conversion of CO2 from all point sources and open air, and appropriate alignment with international agreements, this planet is on route to managing global warming and climate change within this century.
+As new technologies are advanced, such as solar and wind sources, and more carbon-neutral fuels are used, progress will surely accelerate further. This, coupled with global practices such as reforestation, complete capture and conversion of CO2 from all point sources and open air, and appropriate alignment with international agreements, this planet is on route to managing global warming and climate change within this century.
 
 ###  What to improve in this project
 
