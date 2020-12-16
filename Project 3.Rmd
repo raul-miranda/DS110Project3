@@ -1,0 +1,440 @@
+---
+title: "Project 3"
+author: "Raul Miranda"
+date: "12/14/2020"
+output: html_document
+---
+
+# Climate-Related Signs and Consequences
+
+Source: World Bank "Climate Change", https://data.worldbank.org/topic/climate-change
+
+Dataset: downloaded CSV file from World Bank:  
+API_19_DS2_en_csv_v2_1741755.csv
+Metadata_Indicator_API_19_DS2_en_csv_v2_1741755.csv
+Metadata_Country_API_19_DS2_en_csv_v2_1741755.csv
+
+Output RPubs in: https://rpubs.com/rmiranda/704901
+
+Output, database and source files at github: https://github.com/raul-miranda/DS110Project3
+
+```{r setup, include=FALSE}
+
+require(knitr)
+options(repos="https://cran.rstudio.com")
+knitr::opts_chunk$set(echo = TRUE) 
+# set the default root.dir in this r-setup chunk for the whole notebook
+opts_knit$set(root.dir = "/Users/raulmiranda/Desktop/DATA 110 Fall 2020/Databases/World Bank Climate Change/")
+
+```
+
+### Load packages and libraries
+
+```{r message=FALSE, warning=FALSE}
+
+install.packages("tidyverse")
+install.packages("readr")
+install.packages("Metrics")
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(RColorBrewer)
+library(viridis)
+library(Metrics)
+library(splines)
+library(mgcv)
+library(psych)
+library(GGally)
+
+```
+
+### Read in dataset
+
+```{r message=FALSE, warning=FALSE}
+
+worldclim <- read.csv("API_19_DS2_en_csv_v2_1741755.csv", header = FALSE)  # file with header
+head(worldclim)
+
+```
+
+### Clean header, correct column names, convert to long
+
+```{r message=FALSE, warning=FALSE}
+
+worldclim <- worldclim[-(1:2),]   # delete first two rows of header
+colnames(worldclim) <- worldclim[1,]   # make column name = first row
+worldclim <- worldclim[-1,]       # delete first row
+names(worldclim) <- gsub(" ", "_", names(worldclim))  # replace space in var name with underscore
+worldclim <- worldclim[,-ncol(worldclim)]  #  delete last column - empty
+worldclim <- gather(worldclim, key="year", value="quantity", "1960":"2020")  # make long
+worldclim$year <- as.numeric(worldclim$year)  # convert chr to numeric, needed for plots and stats
+str(worldclim)
+
+```
+
+### Take a glimpse at USA and selected Indicators: population, emissions, energy use
+
+```{r message=FALSE, warning=FALSE}
+
+# Notes: some details when using variable names in grepl or logical comparisons 
+#      note: for var name with a space, I had to use backquotes such as `Country Name`;
+#            all vars were cleaned of spaces to avoid this complication
+#      note:  for grepl I used the escape with parentheses: \\( \\)
+#             however, for logical comparisons, I had to remove the escape!!
+#      note:  to grepl more than one Indicator I used paste():  grepl(paste(c("Energy use", "CO2
+#              emissions"),collapse = "|"), Indicator_Name, ignore.case = TRUE) 
+
+USclim <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Population, total", "Energy use \\(kg of oil equivalent per capita\\)", "CO2 emissions \\(metric tons per capita\\)"), collapse = "|"), Indicator_Name))
+
+# scale the Indicator values for clearer graphs 
+
+USclimodf <- within(USclim, {
+  f <- Indicator_Name == 'Population, total'
+      quantity[f] <- quantity[f]/10^6})           #Population in million
+
+USclimodf <- within(USclimodf, {
+  f <- Indicator_Name == 'Energy use (kg of oil equivalent per capita)'
+      quantity[f] <- quantity[f]/25})            # Energy use: multiply 25 kg Oil-E-P-Capita
+
+USclimodf <- within(USclimodf, {
+  f <- Indicator_Name == 'CO2 emissions (metric tons per capita)'
+      quantity[f] <- quantity[f]*10})            # CO2 emission: multiply 0.1 ton Per Capita
+
+USclimodf$f <- NULL # remove the added column 'f'
+
+USclimgrp <- group_by(USclimodf, Indicator_Name, year)  # not absolutely necessary if not followed by aggregation
+head(USclimgrp)
+
+```
+
+### Exploratory: show each of the three Indicators for the US
+
+```{r message=FALSE, warning=FALSE}
+
+p0 <- ggplot(data=USclimgrp,aes(x=year, y=quantity, color=Indicator_Name)) +
+  theme_linedraw() +          
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ Indicator_Name, scales = "free_y", 
+    labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+  theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) +
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+  theme(legend.position="bottom", legend.title = element_blank())
+
+# Notes: tried facet_grid - useful for more than one country 
+#   facet_grid(Indicator_Name ~ Country_Name, margins=TRUE, scales = "free_y")
+#   scale_x_discrete(guide = guide_axis(n.dodge = 6 )) # x-label was too cluttered
+#   geom_smooth(aes(x=year, y=quantity, color=Indicator_Name))  # smooth is less precise
+
+p0
+
+# describeBy(USclimgrp[,3:6],'Indicator_Name') # basic statistics
+by(USclimgrp[,3:6], USclimgrp[,'Indicator_Name'], summary) # basic statistics
+
+```
+
+### Show Fig. 1: population, energy use and emissions in single scatterplot
+
+```{r message=FALSE, warning=FALSE}
+
+p1 <- ggplot(data=USclimgrp,aes(x=year, y=quantity, color=Indicator_Name, alpha = Indicator_Name=='Population, total')) +       # reduce the alpha only for Population
+  theme_dark()  +
+  geom_point(size = 3)  +
+  geom_line() +
+  scale_alpha_manual(values = c(1, .4), guide=FALSE) +
+  theme (axis.text.x = element_text(angle = 0, hjust = 0.5), axis.title.x = element_blank()) +
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE)) +
+#  scale_y_continuous(sec.axis= sec_axis(~.*25, name ="Energy Use and CO2 Emissions, per capita")) +        # adding a second y axis became more cluttered, so showing only one y axis
+  ylab("Population, Energy Use and CO2 Emissions") +
+  theme(legend.position="bottom", legend.title = element_blank()) +
+  theme(plot.subtitle=element_text(hjust = 0.05)) +
+#  set the order and labels of Indicators in the legend using scale_color_discrete
+    scale_color_discrete(
+  limits = c('Population, total', 'Energy use (kg of oil equivalent per capita)', 'CO2 emissions (metric tons per capita)'),
+  labels = c('Population (Million)', 'Energy use per capita (/25 kg oil equivalent)', 'CO2 emissions per capita (*10 ton)')) +
+labs(title="Fig. 1 - US Population, Energy Use and Emissions", subtitle = "A 55-Year History Showing Promise",
+caption = "Source: World Bank, https://data.worldbank.org/topic/climate-change")
+
+p1
+ggplotly(p1)
+```
+
+### Obtain selected socioeconomic Indicators for the USA
+
+```{r message=FALSE, warning=FALSE}
+
+USsocioec <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Urban population \\(% of total population\\)", "Mortality rate, under-5 \\(per 1,000 live births\\)", "Population in urban agglomerations of more than 1 million \\(% of total population\\)","^Population living in areas where elevation is below 5 meters \\(% of total population\\)","Access to electricity \\(% of population\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USsocioec)
+
+```
+
+### Exploratory: show the socioeconomic Indicators for the USA
+
+```{r message=FALSE, warning=FALSE}
+
+p2 <- ggplot(data=USsocioec,aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y",
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p2
+by(USsocioec[,3:6], USsocioec[,'Indicator_Name'], summary) # basic statistics
+
+```
+
+### Obtain selected agricultural Indicators for the USA
+
+```{r message=FALSE, warning=FALSE}
+
+USclimagric <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Terrestrial and marine protected areas \\(% of total territorial area\\)","Marine protected areas \\(% of territorial waters\\)","Terrestrial protected areas \\(% of total land area\\)","Forest area \\(sq. km\\)", "Agricultural land \\(sq. km\\)", "Rural land area where elevation is below 5 meters \\(sq. km\\)", "Average precipitation in depth \\(mm per year\\)", "Annual freshwater withdrawals, total \\(billion cubic meters\\)", "Cereal yield \\(kg per hectare\\)" ), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USclimagric)
+
+```
+
+### Exploratory: show agricultural Indicators for the USA
+
+```{r message=FALSE, warning=FALSE}
+
+p3 <- ggplot(data=USclimagric, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y",
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 60))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p3
+by(USclimagric[,3:6], USclimagric[,'Indicator_Name'], summary) # basic statistics
+
+```
+
+### Obtain detailed energy and emission indicators for the USA
+
+```{r message=FALSE, warning=FALSE}
+
+USenrgemiss <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("GHG net emissions/removals by LUCF \\(Mt of CO2 equivalent\\)","SF6 gas emissions \\(thousand metric tons of CO2 equivalent\\)","Nitrous oxide emissions \\(thousand metric tons of CO2 equivalent\\)","Methane emissions \\(kt of CO2 equivalent\\)", "PFC gas emissions \\(thousand metric tons of CO2 equivalent\\)", "HFC gas emissions \\(thousand metric tons of CO2 equivalent\\)", "Total greenhouse gas emissions \\(kt of CO2 equivalent\\)", "Other greenhouse gas emissions, HFC, PFC and SF6 \\(thousand metric tons of CO2 equivalent\\)","CO2 emissions from solid fuel consumption \\(kt\\)","CO2 emissions from liquid fuel consumption \\(kt\\)", "CO2 emissions \\(kt\\)","CO2 emissions from gaseous fuel consumption \\(kt\\)","CO2 intensity \\(kg per kg of oil equivalent energy use\\)","Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)","Renewable energy consumption \\(% of total final energy consumption\\)","Electricity production from renewable sources, excluding hydroelectric \\(% of total\\)","Renewable electricity output \\(% of total electricity output\\)","Electricity production from oil sources \\(% of total\\)", "Electricity production from nuclear sources \\(% of total\\)","Electricity production from natural gas sources \\(% of total\\)","Electricity production from hydroelectric sources \\(% of total\\)","Electricity production from coal sources \\(% of total\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+str(USenrgemiss)
+
+```
+
+### Exploratory:  show the energy and emission indicators
+
+```{r message=FALSE, warning=FALSE}
+
+p4 <- ggplot(data=USenrgemiss, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y", 
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 50))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p4
+
+```
+
+### Remove the least informative indicators
+
+```{r message=FALSE, warning=FALSE}
+
+USenrgemiss2 <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Nitrous oxide emissions \\(thousand metric tons of CO2 equivalent\\)","Methane emissions \\(kt of CO2 equivalent\\)", "Total greenhouse gas emissions \\(kt of CO2 equivalent\\)", "Other greenhouse gas emissions, HFC, PFC and SF6 \\(thousand metric tons of CO2 equivalent\\)","CO2 emissions from solid fuel consumption \\(kt\\)","CO2 emissions from liquid fuel consumption \\(kt\\)", "CO2 emissions \\(kt\\)","CO2 emissions from gaseous fuel consumption \\(kt\\)","CO2 intensity \\(kg per kg of oil equivalent energy use\\)","Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)","Renewable energy consumption \\(% of total final energy consumption\\)","Electricity production from renewable sources, excluding hydroelectric \\(% of total\\)", "Electricity production from oil sources \\(% of total\\)", "Electricity production from nuclear sources \\(% of total\\)","Electricity production from natural gas sources \\(% of total\\)","Electricity production from hydroelectric sources \\(% of total\\)","Electricity production from coal sources \\(% of total\\)"), collapse = "|"), Indicator_Name, ignore.case = TRUE))
+
+```
+
+### Exploratory: show the energy and emission Indicators
+
+```{r message=FALSE, warning=FALSE}
+
+p5 <- ggplot(data=USenrgemiss2, aes(x=year, y=quantity, color=Indicator_Name)) +
+   theme_linedraw() +
+   geom_point() +
+   geom_line() +
+   facet_wrap(~ Indicator_Name, scales = "free_y", 
+              labeller = labeller(Indicator_Name = label_wrap_gen(width = 50))) +
+   theme (axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+   scale_x_continuous(guide = guide_axis(check.overlap = TRUE )) +
+   theme(legend.position="bottom", legend.title = element_blank())
+
+p5
+by(USenrgemiss2[,3:6], USenrgemiss2[,'Indicator_Name'], summary) # basic statistics
+
+
+```
+
+### Show Energy, total vs electric
+
+```{r message=FALSE, warning=FALSE}
+
+# select population, energy total and electric
+USenergy <- filter (worldclim, grepl("United States", Country_Name) & grepl(paste(c("Population, total", "Energy use \\(kg of oil equivalent per capita\\)","Electric power consumption \\(kWh per capita\\)"), collapse = "|"), Indicator_Name))
+
+# Obtain total energy by multiplying Population * energy per capita
+# Convert units of energy to QUAD in the indicators
+# conversion factors: 1 kWh = 3.412*10^-12 QUAD
+#                     1 kg Oil Equiv = 39.686*10-12 QUAD
+
+USenermdf <- within(USenergy, {
+ f <- Indicator_Name == 'Population, total'
+ g <- Indicator_Name == 'Electric power consumption (kWh per capita)'
+ quantity[g] <- quantity[f]*quantity[g]*3.412*(10^-12)})    # elec energy in Quads
+
+USenermdf <- within(USenermdf, {
+ f <- Indicator_Name == 'Population, total'
+ g <- Indicator_Name == 'Electric power consumption (kWh per capita)'
+ h <- Indicator_Name == 'Energy use (kg of oil equivalent per capita)'
+ quantity[h] <- quantity[f]*quantity[h]*39.686*(10^-12) - quantity[g]})  # Energy Tot-Elec Quads
+
+USenermdf <- filter(USenermdf, ! Indicator_Name == "Population, total") # remove Population from the plot
+
+p6 <- ggplot(USenermdf, aes(x=year, y=quantity, fill= factor(Indicator_Name))) +
+  geom_area(stat="identity", color = "white") +
+  theme_dark() +
+  theme (axis.text.x = element_text(angle = 0, hjust = 0.5, size = 10), axis.title.x = element_blank()) +
+  theme (axis.text.y = element_text(size =10)) +
+  scale_x_continuous(guide = guide_axis(check.overlap = FALSE )) +
+  ylab("Energy Consumed in the USA (QUAD)") +
+  theme(legend.position="top", legend.title = element_blank(), legend.text = element_text(size=10)) +
+#  set the order and labels of Indicators in the legend using scale_fill_discrete
+  scale_fill_discrete(
+  limits = c('Electric power consumption (kWh per capita)', 'Energy use (kg of oil equivalent per capita)'),
+  labels = c('Electric Energy', 'Non-Electric Energy') )+
+labs(title="Fig. 2 - Electric Energy Fraction is Increasing",
+caption = "1 QUAD = 10^15 BTU = 2.52*10^7 Ton Oil Equiv = 2.93*10^8 MWh \n Source: World Bank, https://data.worldbank.org/topic/climate-change")
+
+p6
+ggplotly(p6)
+
+``` 
+
+
+# Essay
+
+## Climate-Related Signs and Consequences
+
+R. Miranda
+December 15, 2020
+
+### Origin of the dataset
+
+World Bank "Climate Change" indicators, https://data.worldbank.org/topic/climate-change
+
+### Importance of the topic
+
+The 2014 assessment report of the Intergovernmental Panel on Climate Change (IPCC), which followed the Paris Agreement, reiterated the ambitious goal set in the 2007 report of limiting the extent of global warming to less than 2 degrees Celsius above pre-industrial levels [1]. Special studies that are ongoing in preparation for a 2022 assessment report have concluded that a more drastic limit of 1.5 degrees Celsius is imperative. The key finding in all reports is that human influence on the climate system is clear; that not acting now imposes severe risks and irreversible impacts; and that we have the means to respond to the threat of climate change while building a sustainable and prosperous future for all humankind.
+
+Among the 17 sustainability goals of the United Nations [2], goal 13 is to take urgent action to combat climate change and its impacts, but it is intimately linked to other goals, such as ending poverty and inequality everywhere, promoting sustainable agriculture, water availability, sustainable energy, sustainable industrialization, cities, forests, oceans and ecosystems. Climate change is likely to affect developing countries the worst. Global cooperation across borders will become increasingly critical, in order to identify a global solution as well as individual solutions tailored to the needs of the various countries.
+
+Temperature rise above the normal historic cycles is but one indicator of human influence. The underlying cause for temperature rise is an excess of gases such as CO2, methane, chlorofluorocarbons and others that produce a greenhouse effect, trapping heat in the atmosphere. The leading cause of excessive greenhouse gases (GHG) has been the combustion of carbon-containing fuels; combustion has produced the majority of the energy necessary for the rapid industrial and economic growth of the past 150 years. 
+
+Hence one approach to ameliorate GHG accumulation has been the transition towards carbon-free or carbon-neutral fuels, which started to accelerate 30 years ago. Another approach has been the increasing efficiency with which energy and raw materials are being used for transportation, industry, construction, communications, agriculture, houses, buildings, consumables, that is, all aspects of modern societies. A third important approach has been to increase absorption of GHG by land and oceans, for example with more forests and treated waters. Yet other approaches have been to convert CO2 back to chemicals (artificial photosynthesis), inject it underground to assist oil and gas extraction, or permanently trap it as carbonate minerals. Despite such initial efforts, we are far from reaching the sustainable path promoted by the IPCC.
+
+This project is an initial step to examine the measurable quantities identified by the World Bank as descriptors or indicators of causes and effects of climate change. In this initial step the analysis is limited to the USA. Understanding how the various causes and effects have progressed over the past 55 years is instructive and may motivate more personal action.
+
+### Description of the dataset and data manipulation
+
+The World Bank "Climate Change" dataset includes over 20,000 records of 66 variables (wide format) and 75 indicators covering a broad range of aspects: social factors, types of gaseous emissions, land and agricultural measures, and energy production and consumption measures. It lacks several of the economic factors, such as GDP and various industrial and commercial productivity measures. Some of the highly relevant factors, such as arable or habitable land changes, floods, disasters, are not well populated, preventing significant inference from them.  The dataset covers over 170 countries, but data are scarce for many of them, particularly during the 1960-1990 period.
+
+All of the indicators are defined in the metadata file available at the github link for this project, https://github.com/raul-miranda/DS110Project3 and are not reproduced here.
+
+### Reduction of the dataset
+
+As a starting step, this project was focused on the USA, or about 25,000 records covering all of the indicators during the entire time period.
+
+### Exloration of trends in population, CO2 emissions, and energy use per capita
+
+In order to obtain an impression of the 55-year evolution, we isolated the three indicators with and scaled their values appropriately for a clear graphical depiction in a scatterplot format. Notice that in the exploratory plots, Population is expressed in million, while Energy use expressed as kg oil equivalent per capita must be multiplied by 25, and CO2 emission expressed as ton per capita must be divided by 10.
+
+Fig. 1 shows that while the US population grew linearly over the entire time period, the energy use per capita had drastic variations. Energy use increased by over 50% in the 1960s, reaching its peak in 1973, when the two oil crises of 1973 and 1979 caused it to descend by 20%. Energy use then rose slowly in the 1980-2000 period up to 10% below its 1973 peak. Since 2000 energy use per capita has been steadily decreasing and is now at the level it was in 1968. This has been made possible by progress in all technologies that are making more efficient use of energy, even with a constantly rising standard of living.  The CO2 emission curve shows a parallel trend to that of energy use, an indication that CO2 emission is mainly due to total combustion of carbon-containing fuels. The very encouraging sign is that CO2 emission per capita is at a level equivalent to that of 1960. This is due not only to more efficient use of energy but also to active approaches to reduce the CO2 emitted per unit of energy, by substituting coal by liquid fuels, and more recently, natural gas. The transition from coal-based energy supply to liquid and gas energy supply over the last decades was studied and shown in Project 2. In this third project, we are being surprised by the drastic decrease shown by the data for energy use and CO2 emission per capita.
+
+### Exploration of selected socioeconomic indicators: urban population and its distribution, mortality under age of 5, access to electricity
+
+We wanted to see whether the consequences of global warming, such as temperature rise and ocean level rise, would be reflected in the basic socioeconomic measures available within this dataset. The general conclusion is that the data available for the US alone does not allow a logical correlation between those indicators and global warming. Perhaps a broader study including all of the countries would be more informative.
+
+For the US, access to electricity has been 100% over the entire time period. Population living in areas less than 5 m above sea level has been an average of 2.53%, growing from 2.50 to 2.58% in 55 years, perhaps an indication of sea level rise, although the population may have chosen to move closer to the low-level areas.
+
+The rapid decrease in mortality rate under the age of 5 from 30 to 6 deaths per 1000 live births has clearly been the consequence of increasing standard of living (access to health services) and more advanced medical technology. From the Gapminder case study, we saw that mortality rate has decreased globally, although some countries have seen lower rate of progress, and in some cases a reversal has occurred in some of the war-ridden areas.
+
+A clear marker of a growing and more affluent population is the rapid urbanization of society. The US has averaged 76% of the population living in urban areas, growing from 70% to 82% in 55 years. An average of 42% live in cities of more than a million, rising from 38% to 46%. One would expect that energy use and GHG emission per person would be higher in urban environments, and even higher with hotter temperatures. However, the trends seen in Figure 1 oppose such assumption, and it seems surprising.
+
+
+### Exploration of selected agricultural indicators: agricultural land, cereal yield, forest area, annual freshwater withdrawal
+
+The question in mind was how agricultural factors influence global warming and vice versa. Following my introductory comments, it is expected that extensive development of rural areas for agriculture will ameliorate greenhouse gases and thus help to combat global warming. This dataset shows some encouraging but also other discouraging signs.
+
+Agricultural land has decreased about 10% over 55 years, perhaps associated with more of the population living in urban localities. However, land productivity (measured by cereal yield) has more than tripled from 2522 to 8281 kg per hectare, due to advanced agricultural technology. The energy cost and CO2 emissions per kg of cereal (and related food sources) have likely decreased.
+
+The other good trend is the rise of forest land, albeit only by 3.5%, not sufficiently to absorb the excess of emitted CO2. Planned reforestation is, however, an effective approach that should be enlarged.
+
+Average freshwater withdrawal has averaged 470 billion cubic meters, decreasing from 518 to 419 in 35 year, but the data is insufficient to show that global warming is the cause.
+
+These indicators are likely very informative when comparing countries at various levels of economic development, particularly to compare changes in agricultural and forestation practices.
+
+### Exploration of electrical energy and emission indicators in detail
+
+The question to explore was what specific greenhouse gases are emitted and which electrical energy sources are used in the US.  Identifying the specific gases may lead to more targeted technologies. Electricity is an energy carrier and intrinsically has no GHG consequence during use. However, the means by which it is produced leads to different amounts of GHG emission. 
+
+An initial set of 23 indicators included separate charts for CFC, SF6 and HFC, which are fluorocarbons and sulfur fluoride emitted during from chemicals and materials produced in electronic manufacturing, refrigerants, house and car insulation, plastic insulation of electrical cables, etc. They have a significant global warming effect, but the amount emitted is a small fraction compared to CO2 and methane emissions. Thus the set was reduced to 18 indicators that included a cumulative curve for HFC, PFC and SF6.
+
+Other emission indicators included CO2 emissions from gaseous, liquid and solid fuels separately; methane emissions; and nitrous oxide emissions. 
+
+The electricity sources included coal, hydroelectric, natural gas, nuclear, oil, and renewable sources.
+
+Visual examination of the various trends allowed us to draw the following conclusions.
+
+
+### Greenhouse Gas Emissions
+
+#### CO2 emissions
+
+The total CO2 emissions chart resembles the trace observed in Fig. 1 (emissions per capita) but multiplied by population. Thus, after a drop in total CO2 emissions that started in 2005, the current level is equivalent to the 1992 emissions, still a very encouraging sign of progress.
+
+Examining the emissions from the various types of fuels, it can be concluded that liquid sources (oil) led to the rapid rise in the 1960-1980 period, coal sources and natural gas produced the increases in 1980-2000. The continuous decrease after 2005 is due to the substition of coal by natural gas.   Natural gas produces less CO2 than coal or liquid hydrocarbons for the same amount of energy produced.
+
+A fantastic trend is shown by CO2 intensity, which is the amount of CO2 emitted per unit of energy used (mean value: 2.6 kg of CO2 per kg of oil equivalent).  Over the past 50 years, it has been continuously decreasing from 2.8 to 2.3 kg/kg. As reflected when examining Fig. 1, this is a sign of technological advancement, and of using less polluting fuels.
+
+#### Other emissions
+
+Methane and nitrous oxide: both have global warming effects larger than CO2 but are emitted in lesser quantities. As depicted in the charts, they represent 10% and 6%, respectively, of the corresponding amounts of CO2 and have been continuously decreasing since the early 1990s to 8% and 5% of the amounts of CO2. While nitrous oxide is a product of combustion, like CO2, methane is released primarily through leaks in pipelines and at flares in refineries. Current regulations curtail flaring methane and are having an impact.
+
+The chlorofluorocarbons, on the other hand, are increasing, and in aggregate represent about 10% of the corresponding amount of CO2. This is a source which could be better regulated by governments and controlled by plastics and insulator manufacturers.
+
+### Electrical Energy Generation
+
+An examination of the charts reveals that coal sources predominated (>50% supply) since 1960 until 2005, and then have fallen to 35% supply during recent years. Oil sources upsurged in 1970-1980 (up to 15% supply). Natural gas sources have varied from 20% in 1960 to 10% in 1995 and are on the upsurge to 30% supply today, and rising. Nuclear sources did not start until 1970 and have risen to 20% and are continuing steady at present. Hydroelectric sources were popular in 1960 (15% supply) but have decreased continuously to about 5% at present. Other renewables, particularly solar sources that started in 1995, and wind sources that started recently, have increased continuously up to 9% of all electrical energy at present.
+
+### Overall Energy Generation and Perspectives
+
+The electrical and non-electrical energy consumed in the US are compared in Fig. 2. The calculation involved multiplying energies per capita by population for each year. To obtain the non-electrical energy, the electrical energy was subtracted from the total energy consumed in the US. The units for both types of energy were converted to Quad for proper comparison (1 Quad = 10^15 BTU).
+
+The figure shows that the fraction of electric energy has been increasing since 1960, it is now at 16% of all energy used in the US, and the pace is accelerating. This is a good sign. As discussed in the previous section, the rise of natural gas and the emergence of solar energy are leading to less CO2 and nitrous oxide emissions. The downward trend shown by the CO2 intensity chart is indicative of continuous technological progress.
+
+As new technologies are introduced, such as wind, and less combustible fuels are used, progress will surely accelerate further. This, coupled with global practices such as reforestation, complete capture and conversion of CO2 from all point sources and open air, and appropriate alignment with international agreements, this planet is on route to managing global warming and climate change within this century.
+
+###  What to improve in this project
+
+This project was an initial step in analyzing the indicators provided by World Bank in the "climate change" dataset, and it was limited to the USA. With the current dataset, it remains to expand the analysis to the world. Use of geographical visualization tools would immensely improve the impact of this project.
+
+As indicated earlier, this dataset could be complemented with other datasets from World Bank that measure better the trends in agriculture, land use, societal trends, and economic factors. With more data, correlations would lead to better understanding the effects that climate change are having on societal, agricultural and economic indicators, appropriately separating climate change related causes from other causes.
+
+
+### References
+
+1. https://www.ipcc.ch/outreach-material/
+2. https://www.un.org/sustainabledevelopment/sustainable-development-goals/
+
+
+
+
